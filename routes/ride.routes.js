@@ -7,6 +7,7 @@ const {
   acceptRide,
   updateRideStatus,
   getMyRides,
+  getRequest
 } = require("../controllers/ride.controller");
 
 // ...
@@ -16,5 +17,5 @@ router.get("/available", auth, getAvailableRides);       // Ver viajes disponibl
 router.post("/:rideId/accept", auth, acceptRide);        // Aceptar viaje (conductor)
 router.put("/:rideId/status", auth, updateRideStatus);  // Actualizar estado del viaje
 router.get("/my", auth, getMyRides); // mostrar viajes activos
-
+router.get("/request", auth, getRequest);
 module.exports = router;

@@ -106,3 +106,29 @@ exports.getMyRides = async (req, res) => {
     res.status(500).json({ message: "Error al obtener viajes" });
   }
 };
+//--------------------------------
+
+exports.getRequest = async (req, res) => {
+  try {
+    const { passengerId, origin } = req.body;
+
+    if (!passengerId || !origin) {
+      return res.status(400).json({ message: "Datos incompletos" });
+    }
+
+    const newRide = new Ride({
+      passenger: passengerId,
+      origin,
+    });
+
+    await newRide.save();
+
+    res.status(201).json({
+      message: "Solicitud de viaje registrada",
+      rideId: newRide._id,
+    });
+  } catch (err) {
+    console.error("Error al crear el viaje:", err.message);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};

@@ -29,7 +29,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/location", locationRoutes);
-
+app.use("/api/messages", messageRoutes);
 
 // Conexión a MongoDB
 mongoose
@@ -47,7 +47,5 @@ app.listen(4000, '0.0.0.0', () => {
   console.log("Servidor backend corriendo en el puerto 4000");
 });
 
-
-app.use("/api/messages", messageRoutes);
 
 app.set("io", io);

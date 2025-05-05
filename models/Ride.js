@@ -1,8 +1,12 @@
+// models/Ride.js
 const mongoose = require("mongoose");
 
-const RideSchema = new mongoose.Schema({
-  passenger: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  driver: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+const rideSchema = new mongoose.Schema({
+  passenger: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
   origin: {
     lat: Number,
     lng: Number,
@@ -11,13 +15,20 @@ const RideSchema = new mongoose.Schema({
     lat: Number,
     lng: Number,
   },
-  price_offered: Number,
-  price_accepted: Number,
+  driver: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
   status: {
     type: String,
-    enum: ["requested", "accepted", "in_progress", "completed", "cancelled"],
-    default: "requested",
+    enum: ["buscando", "asignado", "en_curso", "finalizado", "cancelado"],
+    default: "buscando",
   },
-}, { timestamps: true });
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
 
-module.exports = mongoose.model("Ride", RideSchema);
+module.exports = mongoose.model("Ride", rideSchema);
