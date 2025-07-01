@@ -1,4 +1,3 @@
-// models/Ride.js
 const mongoose = require("mongoose");
 
 const rideSchema = new mongoose.Schema({
@@ -8,8 +7,8 @@ const rideSchema = new mongoose.Schema({
     required: true,
   },
   origin: {
-    lat: Number,
-    lng: Number,
+    lat: { type: Number, required: true },
+    lng: { type: Number, required: true },
   },
   destination: {
     lat: Number,
@@ -22,8 +21,14 @@ const rideSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["buscando", "asignado", "en_curso", "finalizado", "cancelado"],
+    enum: ["buscando", "aceptado", "en_curso", "finalizado", "cancelado"],
     default: "buscando",
+  },
+  price_offered: {
+    type: Number,
+  },
+  price_accepted: {
+    type: Number,
   },
   createdAt: {
     type: Date,

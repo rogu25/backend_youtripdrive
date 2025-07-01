@@ -1,34 +1,24 @@
 const Location = require("../models/Location");
 
+// user.controller.js
 exports.updateLocation = async (req, res) => {
+  const userId = req.userId; // sacado del token
+  console.log("que me llega aqui: ", userId)
+  const { lat, lng } = req.body;
+
+  console.log("que me llega BODY: ", req.body)
+
   try {
-    const userId = req.userId;
-    const { lat, lng } = req.body;
-
-    if (!lat || !lng) {
-      return res.status(400).json({ msg: "Latitud y longitud son requeridas" });
-    }
-
-    // Busca si ya tiene una ubicación registrada
-    let location = await Location.findOne({ user: userId });
-
-    if (location) {
-      // Actualiza si existe
-      location.coordinates = { lat, lng };
-      location.updatedAt = Date.now();
-      await location.save();
-    } else {
-      // Crea nueva si no existe
-      location = new Location({
-        user: userId,
-        coordinates: { lat, lng },
-      });
-      await location.save();
-    }
-
-    res.status(200).json({ msg: "Ubicación actualizada correctamente" });
+    await User.findByIdAndUpdate(userId, { location: { lat, lng } });
+    res.status(200).json({ message: "Ubicación actualizada" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Error al actualizar ubicación" });
+    res.status(500).json({ message: "Error al actualizar ubicación" });
   }
+};
+
+exports.getDriverLocation = async (req, res) => {
+  const { driverId } = req.params;
+  const location = await Location.findOne({ driverId }).sort({ updatedAt: -1 });
+  if (!location) return res.status(404).json({ message: "No hay ubicación aún" });
+  res.json(location);
 };

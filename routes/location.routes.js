@@ -2,9 +2,10 @@ const express = require("express");
 const router = express.Router();
 const Location = require("../models/Location");
 const authMiddleware = require("../middlewares/auth.middleware");
+const driverLocation = require("../controllers/location.controller");
 
 // Obtener conductores disponibles
-router.get("/available", async (req, res) => {
+router.get("/available",  async (req, res) => {
   try {
     const drivers = await Location.find().populate("user", "name");
     res.json(drivers);
@@ -20,8 +21,12 @@ router.post("/update", authMiddleware, async (req, res) => {
     const userId = req.userId;
     const { lat, lng } = req.body;
 
-    if (!lat || !lng) {
-      return res.status(400).json({ msg: "Latitud y longitud requeridas" });
+    if (!userId) {
+      return res.status(401).json({ msg: "Usuario no autenticado" });
+    }
+
+    if (typeof lat !== "number" || typeof lng !== "number") {
+      return res.status(400).json({ msg: "Latitud y longitud requeridas y válidas" });
     }
 
     let location = await Location.findOne({ user: userId });
@@ -40,9 +45,14 @@ router.post("/update", authMiddleware, async (req, res) => {
 
     res.status(200).json({ msg: "Ubicación actualizada correctamente" });
   } catch (err) {
-    console.error(err);
+    console.error("Error interno al actualizar ubicación:", err);
     res.status(500).json({ msg: "Error al actualizar ubicación." });
   }
 });
+
+
+// GET /api/location/:driverId
+router.get("/:driverId",  driverLocation.getDriverLocation);
+
 
 module.exports = router;

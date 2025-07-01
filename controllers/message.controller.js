@@ -1,24 +1,47 @@
+// controllers/message.controller.js
 const Message = require("../models/Message");
 const Ride = require("../models/Ride");
 
-exports.getRideMessages = async (req, res) => {
+// Obtener mensajes de un viaje
+const getMessagesByRide = async (req, res) => {
   try {
     const { rideId } = req.params;
 
-    const ride = await Ride.findById(rideId);
-    if (!ride) return res.status(404).json({ message: "Viaje no encontrado" });
-
-    const userId = req.userId;
-    const isAuthorized =
-      ride.passenger.toString() === userId || ride.driver?.toString() === userId;
-
-    if (!isAuthorized) {
-      return res.status(403).json({ message: "No autorizado para ver mensajes" });
+    const rideExists = await Ride.findById(rideId);
+    if (!rideExists) {
+      return res.status(404).json({ message: "Viaje no encontrado" });
     }
 
-    const messages = await Message.find({ ride: rideId }).populate("sender", "name");
+    const messages = await Message.find({ rideId })
+      .populate("sender", "name role")
+      .sort({ createdAt: 1 });
+
     res.json(messages);
-  } catch (err) {
-    res.status(500).json({ message: "Error al obtener mensajes", error: err.message });
+  } catch (error) {
+    console.error("Error al obtener mensajes:", error);
+    res.status(500).json({ message: "Error del servidor" });
   }
+};
+
+// Enviar nuevo mensaje (opcional si quieres vía REST además de socket)
+const sendMessage = async (req, res) => {
+  try {
+    const { rideId } = req.params;
+    const { senderId, content } = req.body;
+
+    const newMessage = new Message({ rideId, sender: senderId, content });
+    await newMessage.save();
+
+    const populatedMsg = await newMessage.populate("sender", "name");
+
+    res.status(201).json(populatedMsg);
+  } catch (error) {
+    console.error("Error al enviar mensaje:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+};
+
+module.exports = {
+  getMessagesByRide,
+  sendMessage,
 };
