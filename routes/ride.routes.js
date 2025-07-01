@@ -8,15 +8,17 @@ const {
   updateRideStatus,
   getMyRides,
   getActiveRide,
-  getRidesById
+  getRidesById,
+  requestRide
 } = require("../controllers/ride.controller");
 
-router.post("/", auth, createRide);                     // Crear viaje (pasajero)
-router.get("/available", auth, getAvailableRides);      // Ver viajes disponibles (conductor)
-router.put("/accept/:rideId", auth, acceptRide);        // Aceptar viaje (conductor)
-router.put("/status/:rideId", auth, updateRideStatus);  // Actualizar estado del viaje
-router.get("/my", auth, getMyRides);                    // Mostrar viajes del usuario
-router.get("/active", auth, getActiveRide);             // Obtener viaje activo
-router.get("/getRidesById/:rideId", auth, getRidesById);      // Obtener viaje por ID
+router.post("/", auth, createRide); // Crear viaje (pasajero)
+router.get("/available", auth, getAvailableRides); // Ver viajes disponibles (conductor)
+router.put("/accept/:rideId", auth, acceptRide); // Aceptar viaje (conductor)
+router.put("/status/:rideId", auth, updateRideStatus); // Actualizar estado del viaje
+router.get("/my", auth, getMyRides); // Mostrar viajes del usuario
+router.get("/active", auth, getActiveRide); // Obtener viaje activo
+router.get("/getRidesById/:rideId", auth, getRidesById); // Obtener viaje por ID
+router.post("/request", auth, requestRide); // solicitar viaje
 
 module.exports = router;
