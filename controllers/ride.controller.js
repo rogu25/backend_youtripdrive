@@ -185,3 +185,51 @@ exports.getRidesById = async (req, res) => {
     res.status(500).json({ error: "Error al obtener el viaje." });
   }
 };
+
+exports.requestRide = async (req, res) => {
+  try {
+    
+    const { passengerId, origin } = req.body;
+
+    if (!passengerId || !origin?.lat || !origin?.lng) {
+      return res
+        .status(400)
+        .json({ message: "Datos incompletos para la solicitud de viaje." });
+    }
+
+    // Verifica si el pasajero ya tiene un viaje activo
+    const existingRide = await Ride.findOne({
+      passenger: passengerId,
+      status: { $in: ["buscando", "aceptado", "en_progreso"] },
+    });
+
+    if (existingRide) {
+      return res
+        .status(409)
+        .json({
+          message: "Ya tienes un viaje en curso o pendiente.",
+          ride: existingRide,
+        });
+    }
+
+    // Crea el nuevo viaje
+    const newRide = new Ride({
+      passenger: passengerId,
+      origin: {
+        lat: origin.lat,
+        lng: origin.lng,
+      },
+      status: "buscando",
+    });
+
+    await newRide.save();
+
+    res.status(201).json(newRide);
+  } catch (error) {
+    console.error("Error al solicitar viaje:", error.message);
+    res.status(500).json({ message: "Error interno del servidor." });
+  }
+};
+
+
+
