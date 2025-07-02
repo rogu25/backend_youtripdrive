@@ -67,14 +67,22 @@ exports.updateRideStatus = async (req, res) => {
   try {
     const { rideId } = req.params;
     const { status } = req.body;
-
-    const allowedStatuses = ["en_curso", "finalizado", "cancelado"];
+    console.log("lo que contiene rideId: ", rideId)
+    console.log("lo que contiene status: ", status)
+    const allowedStatuses = ["en_curso", "finalizado", "cancelado","aceptado"];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Estado no válido." });
     }
 
     const ride = await Ride.findById(rideId);
-    if (!ride) return res.status(404).json({ message: "Viaje no encontrado" });
+
+    console.log("lo que contiene ride: ", ride)
+
+    if (!ride) {
+      return res.status(404).json({ message: "Viaje no encontrado" });
+    }
+
+    
 
     if (
       ![ride.driver?.toString(), ride.passenger?.toString()].includes(
@@ -86,7 +94,7 @@ exports.updateRideStatus = async (req, res) => {
         .json({ message: "No autorizado para actualizar este viaje" });
     }
 
-    if (ride.status === "finalizado" || ride.status === "cancelado") {
+    if (["finalizado", "cancelado"].includes(ride.status)) {
       return res
         .status(400)
         .json({ message: "El viaje ya fue finalizado o cancelado" });
@@ -96,22 +104,23 @@ exports.updateRideStatus = async (req, res) => {
     await ride.save();
 
     const io = req.app.get("io");
-    io.to(ride.passenger.toString()).emit("ride_status_updated", {
-      rideId,
-      status,
-    });
-    if (ride.driver) {
-      io.to(ride.driver.toString()).emit("ride_status_updated", {
+    if (io) {
+      io.to(ride.passenger.toString()).emit("ride_status_updated", {
         rideId,
         status,
       });
+      if (ride.driver) {
+        io.to(ride.driver.toString()).emit("ride_status_updated", {
+          rideId,
+          status,
+        });
+      }
     }
 
     res.json({ message: "Estado actualizado", ride });
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error al actualizar estado", error: err.message });
+    console.error("Error al actualizar estado:", err);
+    res.status(500).json({ message: "Error al actualizar estado", error: err.message });
   }
 };
 
