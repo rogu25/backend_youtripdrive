@@ -94,61 +94,59 @@ exports.getAvailableRides = async (req, res) => {
 };
 
 // 3. Aceptar viaje (Conductor)
+
 exports.acceptRide = async (req, res) => {
-  const { rideId } = req.params;
-  const driverId = req.userId; // ID del conductor autenticado
-  const { price_accepted } = req.body;
+    try {
+        const { rideId } = req.params;
+        const driverId = req.userId; // El ID del conductor que viene del authMiddleware
+        const { price_accepted } = req.body; // El precio aceptado del frontend
 
-  try {
-    // Validar price_accepted
-    if (typeof price_accepted !== 'number' || price_accepted < 0) {
-      return res.status(400).json({ message: "El precio aceptado es inválido." });
+        // 1. Encontrar el viaje por su ID
+        const ride = await Ride.findById(rideId);
+
+        if (!ride) {
+            return res.status(404).json({ message: 'Viaje no encontrado.' });
+        }
+
+        // 2. Validar el estado del viaje (solo se puede aceptar si está "buscando")
+        if (ride.status !== 'buscando') {
+            return res.status(400).json({ message: 'El viaje ya no está disponible o ha sido aceptado por otro conductor.' });
+        }
+
+        // 3. Asignar el conductor y actualizar el estado
+        // ¡IMPORTANTE AQUÍ! Solo actualiza los campos específicos.
+        ride.driver = driverId;
+        ride.status = 'aceptado';
+        ride.price_accepted = price_accepted || ride.price_offered; // Asigna el precio aceptado o el precio_offered si no se envía uno nuevo
+
+        // 4. Guardar los cambios en la base de datos
+        await ride.save(); // Mongoose valida el documento completo, pero como no modificamos los campos requeridos, no habrá problema.
+
+        // 5. Opcional: Notificar al pasajero vía Socket.IO
+        const io = req.app.get("io");
+        if (io) {
+            // Popula el pasajero para enviar sus detalles al conductor
+            const populatedRide = await Ride.findById(rideId)
+                .populate('passenger', 'name email')
+                .populate('driver', 'name vehicleModel vehiclePlate'); // También popula conductor
+            
+            // Envía el viaje actualizado y populado al pasajero
+            io.to(ride.passenger.toString()).emit('ride_accepted', populatedRide);
+            console.log(`📡 Emitting ride_accepted to passenger ${ride.passenger} for ride: ${ride._id}`);
+        }
+
+        // 6. Enviar respuesta exitosa al frontend
+        res.status(200).json({ message: 'Viaje aceptado con éxito.', ride: ride });
+
+    } catch (error) {
+        console.error('❌ Error al aceptar viaje:', error.message);
+        // Puedes añadir un log más detallado del error de validación de Mongoose
+        if (error.name === 'ValidationError') {
+            console.error('Detalles de la validación fallida:', error.errors);
+            return res.status(400).json({ message: "Error de validación del viaje.", errors: error.errors });
+        }
+        res.status(500).json({ message: 'Error interno del servidor al aceptar el viaje.' });
     }
-
-    // Opcional: Validar que el usuario que acepta sea un conductor
-    // if (req.user.role !== 'conductor') {
-    //   return res.status(403).json({ message: "Solo los conductores pueden aceptar viajes." });
-    // }
-
-    const ride = await Ride.findById(rideId);
-
-    if (!ride) {
-      return res.status(404).json({ message: "Viaje no encontrado." });
-    }
-    // Si la idea es que solo un conductor pueda aceptar un viaje en estado 'buscando'
-    if (ride.status !== "buscando" || ride.driver !== null) {
-      return res.status(400).json({ message: "Este viaje ya no está disponible o ha sido aceptado." });
-    }
-
-    // Actualizar el viaje
-    ride.driver = driverId;
-    ride.status = "aceptado";
-    ride.price_accepted = price_accepted;
-
-    // Opcional: Añadir el conductor a rejectedDrivers de otros viajes que ha rechazado,
-    // o limpiar de rejectedDrivers si previamente lo había rechazado (no aplica aquí).
-    // Si tienes `acceptedDrivers` array en el modelo, podrías añadir la oferta del conductor allí.
-
-    await ride.save();
-
-    const io = req.app.get("io");
-    if (io) {
-      // Emitir al pasajero específico que su viaje ha sido aceptado
-      io.to(ride.passenger.toString()).emit("ride_accepted", {
-        rideId: ride._id,
-        driverId: driverId,
-        status: ride.status,
-        price_accepted: ride.price_accepted,
-      });
-      // Opcional: También podrías notificar a otros conductores si tienes lógica de "cancelar para otros"
-      console.log(`📡 Emitting ride_accepted to passenger: ${ride.passenger.toString()} for ride: ${ride._id}`);
-    }
-
-    res.status(200).json({ message: "Viaje aceptado exitosamente.", ride });
-  } catch (err) {
-    console.error("❌ Error al aceptar viaje:", err.message);
-    res.status(500).json({ message: "Error interno del servidor al aceptar el viaje." });
-  }
 };
 
 // 4. Actualizar estado del viaje (Pasajero o Conductor)
