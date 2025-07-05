@@ -12,6 +12,7 @@ const authRoutes = require("./routes/auth.routes");
 const rideRoutes = require("./routes/ride.routes");
 const locationRoutes = require("./routes/location.routes");
 const messageRoutes = require("./routes/message.routes");
+const driverRoutes = require("./routes/driver.routes")
 
 // Importar el manejador de sockets
 const socketHandler = require("./sockets/socketHandler");
@@ -31,12 +32,14 @@ const io = socketIO(server, {
 // Middlewares
 app.use(cors());
 app.use(express.json()); // Para parsear cuerpos de solicitudes JSON
+app.use(express.urlencoded({ extended: true }));
 
 // Rutas API REST
 app.use("/api/auth", authRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/location", locationRoutes);
 app.use("/api/messages", messageRoutes);
+app.use('/api/drivers', driverRoutes); // Monta las rutas de conductores
 
 // Conexión a MongoDB
 mongoose
