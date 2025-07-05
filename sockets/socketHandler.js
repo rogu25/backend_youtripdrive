@@ -1,55 +1,57 @@
-const Message = require("../models/Message");
+// backend/sockets/socketHandler.js
+const Message = require("../models/Message"); // Importa tu modelo de Mensaje
 
-const Ride = require("../models/Ride");
+module.exports = (io) => {
+  io.on("connection", (socket) => {
+    console.log("🔌 Nuevo cliente conectado");
 
+    socket.on("join", (userId) => {
+      socket.join(userId);
+      console.log(`Usuario ${userId} se unió a su sala personal.`);
+    });
 
-function socketHandler(socket, io) {
-  console.log("Cliente conectado:", socket.id);
+    socket.on("join_ride_chat", (rideId) => {
+      socket.join(`ride_${rideId}`);
+      console.log(`Cliente se unió al chat del viaje: ride_${rideId}`);
+    });
 
-  // Unirse a sala privada de usuario
-  socket.on("join", (userId) => {
-    socket.join(userId);
-  });
+    socket.on("send_message", async (msg) => {
+      try {
+        const { rideId, senderId, content } = msg;
 
-  // Unirse a sala de viaje
-  socket.on("join_ride_chat", (rideId) => {
-    socket.join(`ride_${rideId}`);
-    console.log(`Socket ${socket.id} se unió a la sala del viaje ${rideId}`);
-  });
+        // Validación básica de los datos del mensaje
+        if (!rideId || !senderId || !content) {
+          console.error("❌ Mensaje incompleto recibido:", msg);
+          socket.emit("message_error", {
+            message: "Datos de mensaje incompletos. Se requieren rideId, senderId y content.",
+          });
+          return;
+        }
 
-  // Recibir y reenviar mensajes
-  socket.on("send_message", async ({ rideId, senderId, content }) => {
-    if (!rideId || !senderId || !content) return;
-  
-    const ride = await Ride.findById(rideId);
-    if (!ride) return;
-  
-    const isAllowed =
-      ride.passenger.toString() === senderId || ride.driver?.toString() === senderId;
-  
-    if (!isAllowed) return; // No permitir envío
-  
-    const msg = new Message({ ride: rideId, sender: senderId, content });
-    await msg.save();
-  
-    io.to(`ride_${rideId}`).emit("receive_message", {
-      _id: msg._id,
-      ride: msg.ride,
-      sender: msg.sender,
-      content: msg.content,
-      createdAt: msg.createdAt,
+        const newMessage = new Message({ rideId, sender: senderId, content });
+        await newMessage.save();
+
+        // Popula el remitente para incluir el nombre en el mensaje enviado
+        const populatedMsg = await newMessage.populate("sender", "name");
+
+        // Emite el mensaje a todos los clientes en la sala del viaje
+        io.to(`ride_${rideId}`).emit("receive_message", populatedMsg);
+      } catch (err) {
+        console.error("❌ Error al guardar o emitir mensaje:", err.message);
+        socket.emit("message_error", {
+          message: "Error interno al enviar mensaje.",
+          details: err.message,
+        });
+      }
+    });
+
+    socket.on("typing", ({ rideId, senderId }) => {
+      // Emite la notificación de "escribiendo" a todos en la sala excepto al que la envió
+      socket.to(`ride_${rideId}`).emit("user_typing", { senderId });
+    });
+
+    socket.on("disconnect", () => {
+      console.log("🔌 Cliente desconectado");
     });
   });
-
-  socket.on("typing", ({ rideId, senderId }) => {
-    socket.to(`ride_${rideId}`).emit("user_typing", { senderId });
-  });
-  
-
-  socket.on("disconnect", () => {
-    console.log("Cliente desconectado:", socket.id);
-  });
-
-}
-
-module.exports = { socketHandler };
+};
