@@ -5,14 +5,15 @@ const User = require("../models/User"); // Necesitamos el modelo de usuario para
 const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-
+    
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ message: "Acceso denegado. No se proporcionó token de autorización." });
     }
 
     const token = authHeader.split(" ")[1];
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
+    
     const user = await User.findById(decoded.id);
 
     if (!user) {

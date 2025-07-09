@@ -103,6 +103,7 @@ exports.login = async (req, res) => {
     // 2. Buscar usuario por email
     // Usar .select('+password') si tu modelo User tiene 'password' con 'select: false'
     const user = await User.findOne({ email }).select('+password');
+    
     if (!user) {
       return res.status(401).json({ msg: "Credenciales inválidas" }); // No decir "usuario no encontrado" para no dar pistas a atacantes
     }
@@ -116,12 +117,13 @@ exports.login = async (req, res) => {
 
     // 4. Crear token JWT
     // process.env.JWT_SECRET debe estar definido en tu archivo .env
+    
     const token = jwt.sign(
       { id: user._id, role: user.role }, // Incluir el rol en el token es útil para la autorización.
       process.env.JWT_SECRET,
       { expiresIn: "7d" } // Token expira en 7 días
     );
-
+    console.log("intentando obtener errores TOKEN: ", token)
     // 5. Enviar respuesta con información del usuario
     // No enviar la contraseña, incluso si está hasheada.
     res.json({
