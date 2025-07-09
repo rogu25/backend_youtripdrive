@@ -11,8 +11,8 @@ const {
   getMyRides,
   getActiveRide,
   getRideById,
-  cancelRide // <-- Renombrado para coincidir con el controlador
-  // requestRide // <-- COMENTADO/ELIMINADO: Duplicado con createRide
+  cancelRide, // <-- Renombrado para coincidir con el controlador
+  finalizarViaje
 } = require("../controllers/ride.controller");
 
 // 1. POST /api/rides/ - Crear viaje (pasajero)
@@ -39,6 +39,9 @@ router.get("/active", auth, getActiveRide);
 router.get("/:rideId", auth, getRideById); // <-- Usando el nombre corregido del controlador
 
 // 8. POST para eliminar o cancelar un viaje
-router.post('/:id/cancel', auth, cancelRide)
+router.post('/:id/cancel', auth, cancelRide);
+
+// 9. POST para finalizar un viaje
+router.put("/:rideId/finalizar", auth, finalizarViaje);
 
 module.exports = router;

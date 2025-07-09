@@ -1,5 +1,7 @@
 const Ride = require("../models/Ride");
 const Location = require("../models/Location"); // Necesario para obtener la ubicación del conductor
+const User = require("../models/User"); // Asegúrate de tener este import si no lo tenías
+const mongoose = require("mongoose");
 
 // NOTA IMPORTANTE: req.app.get("io") requiere que 'io' sea establecido en server.js
 // como lo hicimos en la revisión de server.js.
@@ -35,7 +37,7 @@ exports.createRide = async (req, res) => {
     // Verifica si el pasajero ya tiene un viaje activo (para evitar múltiples solicitudes)
     const existingActiveRide = await Ride.findOne({
       passenger: req.userId,
-      status: { $in: ["buscando", "aceptado", "en_curso"] },
+      status: { $in: ["buscando", "aceptado", "recogido"] },
     });
 
     if (existingActiveRide) {
@@ -208,9 +210,9 @@ exports.updateRideStatus = async (req, res) => {
     );
 
     // Reglas de negocio para transiciones de estado:
-    if (status === "en_curso") {
+    if (status === "recogido") {
       console.log(
-        `[DEBUG] Intentando pasar a 'en_curso'. userRole: ${userRole}, ride.driver: ${ride.driver?.toString()}, userId: ${userId}`
+        `[DEBUG] Intentando pasar a 'recogido'. userRole: ${userRole}, ride.driver: ${ride.driver?.toString()}, userId: ${userId}`
       );
       if (
         userRole !== "conductor" ||
@@ -253,14 +255,14 @@ exports.updateRideStatus = async (req, res) => {
               "No autorizado para actualizar el estado de este viaje. Solo el conductor asignado puede finalizarlo.",
           });
       }
-      if (ride.status !== "en_curso") {
+      if (ride.status !== "recogido") {
         console.log(
-          `[DEBUG] Estado actual no es 'en_curso' para finalizar: ${ride.status}`
+          `[DEBUG] Estado actual no es 'recogido' para finalizar: ${ride.status}`
         );
         return res
           .status(400)
           .json({
-            message: "El viaje debe estar en estado 'en_curso' para finalizar.",
+            message: "El viaje debe estar en estado 'recogido' para finalizar.",
           });
       }
     } else if (status === "cancelado") {
@@ -340,8 +342,8 @@ exports.getActiveRide = async (req, res) => {
     const userRole = req.user.role; // Asegúrate de que req.user.role esté disponible del authMiddleware
 
     const query = {
-      status: { $in: ["buscando", "aceptado", "en_curso"] },
-      // Construye la query dinámicamente según el rol
+      status: { $in: ["buscando", "aceptado", "recogido"] },
+      // Construye la query dinámicamente según el recogido rol
       [userRole === "pasajero" ? "passenger" : "driver"]: userId,
     };
 
@@ -454,3 +456,85 @@ exports.cancelRide = async (req, res) => {
       .json({ message: "Error interno del servidor al cancelar el viaje." });
   }
 };
+
+// --- NUEVA FUNCIÓN: finalizarViaje ---
+exports.finalizarViaje = async (req, res) => {
+  try {
+    const { rideId } = req.params;
+    const conductorId = req.user._id; // El ID del conductor que viene del token
+
+    // 1. Validar el ID del viaje
+    if (!mongoose.Types.ObjectId.isValid(rideId)) {
+      return res.status(400).json({ message: "ID de viaje inválido." });
+    }
+
+    const ride = await Ride.findById(rideId);
+
+    // 2. Verificar si el viaje existe
+    if (!ride) {
+      return res.status(404).json({ message: "Viaje no encontrado." });
+    }
+
+    // 3. Validar que el usuario que finaliza es el CONDUCTOR asignado
+    if (ride.driver.toString() !== conductorId.toString()) {
+      return res.status(403).json({ message: "No autorizado. Solo el conductor asignado puede finalizar este viaje." });
+    }
+
+    // 4. Validar el estado del viaje para poder finalizarlo
+    // Solo se puede finalizar un viaje que esté en estado 'recogido'
+    if (ride.status !== "recogido") {
+      return res.status(400).json({ message: `No se puede finalizar el viaje en estado '${ride.status}'. El viaje debe estar en estado 'recogido'.` });
+    }
+
+    // 5. Calcular el costo final
+    // Por simplicidad, por ahora usamos el 'price_offered' como el costo final.
+    // ************************************************************************
+    // Si tu aplicación calcula el costo final basado en la distancia real recorrida
+    // o el tiempo de viaje desde que el pasajero fue recogido:
+    // Aquí necesitarías la lógica para hacer ese cálculo. Por ejemplo:
+    // - Podrías necesitar las coordenadas finales del destino (`dropoffLocation`).
+    // - Si estuvieras registrando la ruta real, podrías calcular la distancia total.
+    // - Podrías usar la diferencia entre `pickedUpAt` y `new Date()` para el tiempo.
+    // ************************************************************************
+    const costoCalculado = ride.price_offered; // Asignamos la tarifa inicial como costo final por defecto
+
+    // 6. Actualizar el estado y campos del viaje
+    ride.status = "finalizado"; // <-- Nuevo estado en español
+    ride.completedAt = new Date(); // Establecer la hora de finalización
+    ride.costoFinal = costoCalculado; // <-- Nuevo campo en español
+
+    await ride.save();
+
+    // 7. Notificación al pasajero (opcional, vía Socket.IO)
+    // Asumiendo que tu 'app' tiene una instancia de 'io' (Socket.IO)
+    const io = req.app.get("io");
+    if (io) {
+        // Emitir un evento al pasajero (si está conectado a una sala con su ID)
+        io.to(ride.passenger.toString()).emit("viaje_finalizado", {
+            rideId: ride._id,
+            costoFinal: ride.costoFinal,
+            message: "¡Tu viaje ha sido completado!"
+        });
+        // También puedes emitir a la sala del viaje para todos los participantes
+        io.to(`ride_${rideId}`).emit("viaje_finalizado", {
+            rideId: ride._id,
+            costoFinal: ride.costoFinal,
+            message: "¡El viaje ha sido completado!"
+        });
+        console.log(`📡 Viaje ${rideId} finalizado. Notificando a pasajero ${ride.passenger} y sala del viaje.`);
+    }
+
+    res.status(200).json({
+      message: "Viaje finalizado exitosamente.",
+      ride: ride,
+    });
+
+  } catch (error) {
+    console.error("❌ Error al finalizar el viaje:", error.message);
+    if (error.name === "CastError") {
+      return res.status(400).json({ message: "ID de viaje inválido." });
+    }
+    res.status(500).json({ message: "Error interno del servidor al finalizar el viaje." });
+  }
+};
+
