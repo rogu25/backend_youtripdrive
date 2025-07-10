@@ -27,7 +27,7 @@ const rideSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ["buscando", "aceptado", "en_curso", "finalizado", "cancelado"],
+    enum: ["buscando", "aceptado", "recogido", "en_ruta", "finalizado", "cancelado"],
     default: "buscando",
     required: true, // El estado es un campo fundamental y debe ser requerido
   },

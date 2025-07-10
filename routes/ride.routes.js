@@ -25,7 +25,7 @@ router.get("/available", auth, getAvailableRides);
 router.put("/accept/:rideId", auth, acceptRide);
 
 // 4. PUT /api/rides/status/:rideId - Actualizar estado del viaje (pasajero o conductor)
-router.put("/status/:rideId", auth, updateRideStatus);
+router.put("/:rideId/status", auth, updateRideStatus);
 
 // 5. GET /api/rides/my - Mostrar viajes del usuario (pasajero o conductor)
 router.get("/my", auth, getMyRides);
