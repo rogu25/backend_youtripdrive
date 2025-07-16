@@ -11,7 +11,8 @@ const {
   getMyRides,
   getActiveRide,
   getRideById,
-  cancelRide // <-- Renombrado para coincidir con el controlador
+  cancelRide, // <-- Renombrado para coincidir con el controlador
+  getRideEstimate
   // requestRide // <-- COMENTADO/ELIMINADO: Duplicado con createRide
 } = require("../controllers/ride.controller");
 
@@ -40,5 +41,8 @@ router.get("/:rideId", auth, getRideById); // <-- Usando el nombre corregido del
 
 // 8. POST para eliminar o cancelar un viaje
 router.post('/:id/cancel', auth, cancelRide)
+
+// 9. POST para calcular precio
+router.post('/estimate', auth, getRideEstimate);
 
 module.exports = router;

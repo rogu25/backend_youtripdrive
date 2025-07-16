@@ -1,9 +1,70 @@
 const Ride = require("../models/Ride");
 const Location = require("../models/Location"); // Necesario para obtener la ubicación del conductor
 const User = require("../models/User"); // Para popular datos de conductor/pasajero si es necesario
+const Maps_API_KEY = process.env.Maps_API_KEY;
+const axios = require('axios');
 
-// NOTA IMPORTANTE: req.app.get("io") requiere que 'io' sea establecido en server.js
-// como lo hicimos en la revisión de server.js.
+// Función auxiliar para calcular la tarifa
+// Puedes ajustar esta lógica de precios según tus necesidades
+const calculateFare = (distanceInKm, durationInMinutes) => {
+    const baseFare = 2.50; // Tarifa base (en Soles Peruanos - PEN)
+    const pricePerKm = 0.80; // Precio por kilómetro (en PEN)
+    const pricePerMinute = 0.15; // Precio por minuto (en PEN)
+
+    const fare = baseFare + (distanceInKm * pricePerKm) + (durationInMinutes * pricePerMinute);
+    return parseFloat(fare.toFixed(2)); // Redondear a 2 decimales
+};
+
+exports.getRideEstimate = async (req, res) => {
+    const { origin, destination } = req.body;
+
+    // Aunque no usaremos las coordenadas para un cálculo real,
+    // es buena práctica validarlas si el frontend las va a enviar.
+    if (!origin || !destination || typeof origin !== 'object' || typeof destination !== 'object') {
+        return res.status(400).json({
+            success: false,
+            message: 'Se requieren objetos de origen y destino válidos.'
+        });
+    }
+
+    // --- Lógica de Simulación ---
+    // Aquí simulamos la distancia y la duración.
+    // Puedes hacer esta simulación más sofisticada si lo deseas,
+    // por ejemplo, usando rangos aleatorios o un mapa de ubicaciones predefinidas.
+
+    // Simular una distancia entre 3 km y 25 km
+    const simulatedDistanceKm = parseFloat(((Math.random() * 22) + 3).toFixed(2));
+    // Simular una duración basada en la distancia (ej. 2-3 minutos por km, más un tiempo base)
+    const simulatedDurationMinutes = Math.round((simulatedDistanceKm * (Math.random() * 1 + 2)) + 5);
+    // No necesitamos una polyline real, pero podemos enviar una cadena vacía o nula
+    const simulatedPolyline = null; // O una cadena vacía si prefieres: ""
+
+    try {
+        // 1. Calcular la tarifa con los valores simulados
+        const estimatedFare = calculateFare(simulatedDistanceKm, simulatedDurationMinutes);
+
+        // 2. Enviar la respuesta al frontend
+        res.json({
+            success: true, // Añadimos una bandera de éxito para claridad
+            fare: estimatedFare,
+            duration: simulatedDurationMinutes,
+            distance: simulatedDistanceKm,
+            polyline: simulatedPolyline, // Enviamos null o una cadena vacía
+            currency: "PEN" // Especificamos la moneda (Soles Peruanos)
+        });
+
+    } catch (error) {
+        // Este catch sería más relevante si tuvieras lógica asíncrona dentro
+        // que pudiera fallar (como una llamada a BD), pero para esta simulación
+        // es menos probable que se active a menos que `calculateFare` falle,
+        // lo cual es improbable si `distanceInKm` y `durationInMinutes` son números.
+        console.error('Error interno al calcular la estimación del viaje:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor al calcular la estimación del viaje.'
+        });
+    }
+};
 
 // 1. Crear viaje (Pasajero)
 exports.createRide = async (req, res) => {
