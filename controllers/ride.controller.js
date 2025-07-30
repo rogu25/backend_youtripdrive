@@ -1,72 +1,71 @@
+// backend/controllers/rideController.js
+
 const Ride = require("../models/Ride");
-const Location = require("../models/Location"); // Necesario para obtener la ubicación del conductor
-const User = require("../models/User"); // Para popular datos de conductor/pasajero si es necesario
+const Location = require("../models/Location");
+const User = require("../models/User"); // Importar User (para autenticación y populate del pasajero)
+const Driver = require("../models/Driver"); // <--- ¡¡¡LA IMPORTACIÓN QUE FALTABA Y CAUSABA EL ERROR!!!
 const Maps_API_KEY = process.env.Maps_API_KEY;
-const axios = require('axios');
+const axios = require("axios");
 
 // Función auxiliar para calcular la tarifa
-// Puedes ajustar esta lógica de precios según tus necesidades
 const calculateFare = (distanceInKm, durationInMinutes) => {
-    const baseFare = 2.50; // Tarifa base (en Soles Peruanos - PEN)
-    const pricePerKm = 0.80; // Precio por kilómetro (en PEN)
-    const pricePerMinute = 0.15; // Precio por minuto (en PEN)
+  const baseFare = 2.5; // Tarifa base (en Soles Peruanos - PEN)
+  const pricePerKm = 0.8; // Precio por kilómetro (en PEN)
+  const pricePerMinute = 0.15; // Precio por minuto (en PEN)
 
-    const fare = baseFare + (distanceInKm * pricePerKm) + (durationInMinutes * pricePerMinute);
-    return parseFloat(fare.toFixed(2)); // Redondear a 2 decimales
+  const fare =
+    baseFare + distanceInKm * pricePerKm + durationInMinutes * pricePerMinute;
+  return parseFloat(fare.toFixed(2)); // Redondear a 2 decimales
 };
 
 exports.getRideEstimate = async (req, res) => {
-    const { origin, destination } = req.body;
+  const { origin, destination } = req.body;
 
-    // Aunque no usaremos las coordenadas para un cálculo real,
-    // es buena práctica validarlas si el frontend las va a enviar.
-    if (!origin || !destination || typeof origin !== 'object' || typeof destination !== 'object') {
-        return res.status(400).json({
-            success: false,
-            message: 'Se requieren objetos de origen y destino válidos.'
-        });
-    }
+  if (
+    !origin ||
+    !destination ||
+    typeof origin !== "object" ||
+    typeof destination !== "object"
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Se requieren objetos de origen y destino válidos.",
+    });
+  }
 
-    // --- Lógica de Simulación ---
-    // Aquí simulamos la distancia y la duración.
-    // Puedes hacer esta simulación más sofisticada si lo deseas,
-    // por ejemplo, usando rangos aleatorios o un mapa de ubicaciones predefinidas.
+  const simulatedDistanceKm = parseFloat((Math.random() * 22 + 3).toFixed(2));
+  const simulatedDurationMinutes = Math.round(
+    simulatedDistanceKm * (Math.random() * 1 + 2) + 5
+  );
+  const simulatedPolyline = null;
 
-    // Simular una distancia entre 3 km y 25 km
-    const simulatedDistanceKm = parseFloat(((Math.random() * 22) + 3).toFixed(2));
-    // Simular una duración basada en la distancia (ej. 2-3 minutos por km, más un tiempo base)
-    const simulatedDurationMinutes = Math.round((simulatedDistanceKm * (Math.random() * 1 + 2)) + 5);
-    // No necesitamos una polyline real, pero podemos enviar una cadena vacía o nula
-    const simulatedPolyline = null; // O una cadena vacía si prefieres: ""
+  try {
+    const estimatedFare = calculateFare(
+      simulatedDistanceKm,
+      simulatedDurationMinutes
+    );
 
-    try {
-        // 1. Calcular la tarifa con los valores simulados
-        const estimatedFare = calculateFare(simulatedDistanceKm, simulatedDurationMinutes);
-
-        // 2. Enviar la respuesta al frontend
-        res.json({
-            success: true, // Añadimos una bandera de éxito para claridad
-            fare: estimatedFare,
-            duration: simulatedDurationMinutes,
-            distance: simulatedDistanceKm,
-            polyline: simulatedPolyline, // Enviamos null o una cadena vacía
-            currency: "PEN" // Especificamos la moneda (Soles Peruanos)
-        });
-
-    } catch (error) {
-        // Este catch sería más relevante si tuvieras lógica asíncrona dentro
-        // que pudiera fallar (como una llamada a BD), pero para esta simulación
-        // es menos probable que se active a menos que `calculateFare` falle,
-        // lo cual es improbable si `distanceInKm` y `durationInMinutes` son números.
-        console.error('Error interno al calcular la estimación del viaje:', error.message);
-        res.status(500).json({
-            success: false,
-            message: 'Error interno del servidor al calcular la estimación del viaje.'
-        });
-    }
+    res.json({
+      success: true,
+      fare: estimatedFare,
+      duration: simulatedDurationMinutes,
+      distance: simulatedDistanceKm,
+      polyline: simulatedPolyline,
+      currency: "PEN",
+    });
+  } catch (error) {
+    console.error(
+      "Error interno al calcular la estimación del viaje:",
+      error.message
+    );
+    res.status(500).json({
+      success: false,
+      message:
+        "Error interno del servidor al calcular la estimación del viaje.",
+    });
+  }
 };
 
-// 1. Crear viaje (Pasajero)
 exports.createRide = async (req, res) => {
   try {
     const { origin, destination, price_offered } = req.body;
@@ -88,7 +87,6 @@ exports.createRide = async (req, res) => {
 
     const existingActiveRide = await Ride.findOne({
       passenger: req.userId,
-      // <<< MODIFICACIÓN: Actualiza los estados activos según el enum definitivo >>>
       status: { $in: ["buscando", "aceptado", "recogido", "en_ruta"] },
     });
 
@@ -132,7 +130,6 @@ exports.createRide = async (req, res) => {
   }
 };
 
-// 2. Obtener viajes disponibles (Conductor)
 exports.getAvailableRides = async (req, res) => {
   try {
     const rides = await Ride.find({
@@ -149,93 +146,114 @@ exports.getAvailableRides = async (req, res) => {
   }
 };
 
-// 3. Aceptar viaje (Conductor)
 exports.acceptRide = async (req, res) => {
   try {
     const { rideId } = req.params;
-    const driverId = req.userId;
+    const userId = req.userId; // Este es el _id del 'User' que está autenticado
     const { price_accepted } = req.body;
 
     console.log(
-      `[AcceptRide] Intentando aceptar viaje ${rideId} por conductor ${driverId}`
+      `[AcceptRide] DEBUG: Iniciando aceptación de viaje. rideId: ${rideId}, userId del solicitante (probablemente conductor): ${userId}`
     );
+
+    // *** PASO CLAVE 1: Encontrar el documento Driver asociado al userId ***
+    const driverProfile = await Driver.findOne({ userId: userId });
+
+    console.log(`[AcceptRide] DEBUG: Resultado de buscar Driver para userId ${userId}:`, driverProfile);
+
+    if (!driverProfile) {
+      console.warn(`[AcceptRide] Perfil de conductor no encontrado para el usuario ${userId}.
+        Esto puede deberse a que el usuario no tiene un perfil de Driver asociado o el Driver.findOne({ userId: userId }) falló.`);
+      return res.status(404).json({ message: "Perfil de conductor no encontrado para el usuario." });
+    }
+
+    const driverId = driverProfile._id; // <-- ¡Este es el _id del documento Driver que debemos asignar al viaje!
+    console.log(`[AcceptRide] DEBUG: Driver profile encontrado. El _id del Driver es: ${driverId}`);
 
     let ride = await Ride.findById(rideId);
 
     if (!ride) {
-      console.warn(`[AcceptRide] Viaje ${rideId} no encontrado.`);
+      console.warn(`[AcceptRide] Viaje ${rideId} no encontrado en la DB.`);
       return res.status(404).json({ message: "Viaje no encontrado." });
     }
 
-    console.log(`[AcceptRide] Viaje encontrado. Estado actual: ${ride.status}`);
+    console.log(`[AcceptRide] DEBUG: Viaje encontrado. Estado actual: ${ride.status}`);
 
     if (ride.status !== "buscando") {
       console.warn(
-        `[AcceptRide] Viaje ${rideId} no está en estado 'buscando'. Estado actual: ${ride.status}`
+        `[AcceptRide] DEBUG: Viaje ${rideId} no está en estado 'buscando'. Estado actual: ${ride.status}`
       );
       return res.status(400).json({
-        message:
-          "El viaje ya no está disponible o ha sido aceptado por otro conductor.",
+        message: "El viaje ya no está disponible o ha sido aceptado por otro conductor.",
       });
     }
 
-    ride.driver = driverId;
-    ride.status = "aceptado"; // <<< ESTADO FIJO AQUÍ >>>
+    // *** PASO CLAVE 2: Asignar el _id del Driver al campo 'driver' del viaje ***
+    ride.driver = driverId; // Asignamos el _id del DOCUMENTO DRIVER
+    ride.status = "aceptado";
     ride.price_accepted = price_accepted || ride.price_offered;
 
     await ride.save();
     console.log(
-      `[AcceptRide] Viaje ${rideId} guardado con nuevo estado 'aceptado' y driver ${driverId}.`
+      `[AcceptRide] DEBUG: Viaje ${rideId} guardado con nuevo estado 'aceptado' y Driver ID ${driverId}.`
     );
 
     const io = req.app.get("io");
     if (io) {
       console.log(
-        `[AcceptRide] Instancia de Socket.IO disponible. Populando datos para socket.`
+        `[AcceptRide] DEBUG: Instancia de Socket.IO disponible. Preparando populación para emisión.`
       );
+
+      // Log para verificar el driverId antes de la populación (debería ser el ObjectId del Driver)
+      console.log(`[AcceptRide] DEBUG: ride.driver (antes de populate):`, ride.driver);
+
       const fullRideData = await Ride.findById(rideId)
         .populate("passenger", "name email")
         .populate(
-          "driver",
-          "name vehicle.brand vehicle.model vehicle.color vehicle.licensePlate currentLocation"
+          "driver", // <-- Apunta al modelo 'Driver'
+          "name carDetails.model carDetails.licensePlate carDetails.color currentLocation" // <-- Campos del modelo 'Driver'
         );
+
+      // Log para verificar el driver object después de la populación
+      console.log(`[AcceptRide] DEBUG: fullRideData.driver (después de populate):`, fullRideData.driver);
 
       if (!fullRideData) {
         console.error(
-          `[AcceptRide] ERROR: fullRideData es null o undefined después de la populación para socket.`
+          `[AcceptRide] ERROR: fullRideData es null o undefined DESPUÉS de la populación. Esto es inusual si el rideId existe.`
         );
         throw new Error(
           "No se pudo obtener la información completa del viaje para la emisión del socket."
         );
       }
 
+      // *** ¡Aquí estaba tu error! Esta comprobación ahora nos dirá si fullRideData.driver realmente está vacío ***
       if (!fullRideData.passenger || !fullRideData.driver) {
         console.error(
-          `[AcceptRide] ERROR: Pasajero o Conductor no populados en fullRideData.`
+          `[AcceptRide] ERROR FINAL: fullRideData.passenger (${!!fullRideData.passenger}) o fullRideData.driver (${!!fullRideData.driver}) no fueron populados correctamente.
+          Esto significa que el driverId (${driverId}) en el campo 'driver' del viaje NO CORRESPONDE a un documento REAL en la colección 'drivers' o los campos solicitados no existen en ese documento de Driver.`
         );
         throw new Error(
-          "Datos de pasajero/conductor incompletos para la emisión del socket."
+          "Datos de pasajero/conductor incompletos después de la populación para la emisión."
         );
       }
 
-      // Emitir a la sala del pasajero que el viaje fue aceptado
       io.to(fullRideData.passenger._id.toString()).emit("ride_accepted", {
         rideId: fullRideData._id.toString(),
         passengerId: fullRideData.passenger._id.toString(),
         driverId: fullRideData.driver._id.toString(),
         driverName: fullRideData.driver.name,
         driverVehicle: {
-          brand: fullRideData.driver.vehicle?.brand,
-          model: fullRideData.driver.vehicle?.model,
-          color: fullRideData.driver.vehicle?.color,
-          licensePlate: fullRideData.driver.vehicle?.licensePlate,
+          model: fullRideData.driver.carDetails?.model,
+          color: fullRideData.driver.carDetails?.color,
+          licensePlate: fullRideData.driver.carDetails?.licensePlate,
         },
         driverLocation:
           fullRideData.driver.currentLocation &&
-          fullRideData.driver.currentLocation.coordinates
+          typeof fullRideData.driver.currentLocation.latitude === 'number' &&
+          typeof fullRideData.driver.currentLocation.longitude === 'number'
             ? {
-                latitude: fullRideData.driver.currentLocation.coordinates[1],
-                longitude: fullRideData.driver.currentLocation.coordinates[0],
+                latitude: fullRideData.driver.currentLocation.latitude,
+                longitude: fullRideData.driver.currentLocation.longitude,
               }
             : null,
         status: fullRideData.status,
@@ -243,11 +261,11 @@ exports.acceptRide = async (req, res) => {
       });
 
       console.log(
-        `📡 [AcceptRide] Emitting ride_accepted to passenger ${fullRideData.passenger._id} for ride: ${fullRideData._id}`
+        `📡 [AcceptRide] DEBUG: Emitting ride_accepted to passenger ${fullRideData.passenger._id} for ride: ${fullRideData._id}`
       );
     } else {
       console.warn(
-        '[AcceptRide] Socket.IO no disponible para emisión de "ride_accepted".'
+        '[AcceptRide] DEBUG: Socket.IO no disponible para emisión de "ride_accepted".'
       );
     }
 
@@ -255,10 +273,10 @@ exports.acceptRide = async (req, res) => {
       .populate("passenger", "name email")
       .populate(
         "driver",
-        "name vehicle.brand vehicle.model vehicle.color vehicle.licensePlate currentLocation"
+        "name carDetails.model carDetails.licensePlate carDetails.color currentLocation"
       );
 
-    console.log(`[AcceptRide] Enviando respuesta REST al conductor.`);
+    console.log(`[AcceptRide] DEBUG: Enviando respuesta REST al conductor.`);
     res
       .status(200)
       .json({ message: "Viaje aceptado con éxito.", ride: responseRide });
@@ -269,8 +287,15 @@ exports.acceptRide = async (req, res) => {
       console.error("❌ Stack Trace:", error.stack);
     }
 
+    if (error.name === "CastError") {
+      console.error("Detalles de CastError (posible ID inválido):", error.message);
+      return res.status(400).json({
+        message: "ID de viaje o conductor inválido.",
+        details: error.message
+      });
+    }
     if (error.name === "ValidationError") {
-      console.error("Detalles de la validación fallida:", error.errors);
+      console.error("Detalles de la validación fallida (Mongoose):", error.errors);
       return res.status(400).json({
         message: "Error de validación del viaje.",
         errors: error.errors,
@@ -282,14 +307,13 @@ exports.acceptRide = async (req, res) => {
   }
 };
 
-// 4. Actualizar estado del viaje (Pasajero o Conductor)
 exports.updateRideStatus = async (req, res) => {
   try {
     const { rideId } = req.params;
-    const { status } = req.body; // Nuevo estado al que se quiere cambiar
+    const { status } = req.body;
 
     const userId = req.userId;
-    const userRole = req.userRole; // Asegúrate de que userRole venga del middleware de autenticación
+    const userRole = req.userRole;
 
     console.log(
       `[updateRideStatus] rideId: ${rideId}, newStatus: ${status}, userId: ${userId}, userRole: ${userRole}`
@@ -308,12 +332,11 @@ exports.updateRideStatus = async (req, res) => {
       }, driver: ${ride.driver?.toString()}`
     );
 
-    // <<< MODIFICACIÓN: Validación y transiciones de estado según el enum definitivo >>>
     switch (status) {
-      case "recogido": // Conductor confirma que recogió al pasajero
+      case "recogido":
         if (
           userRole !== "conductor" ||
-          ride.driver?.toString() !== userId.toString()
+          (ride.driver && !ride.driver.equals(userId)) // Usar .equals() para comparar ObjectIds
         ) {
           return res.status(403).json({
             message:
@@ -328,16 +351,15 @@ exports.updateRideStatus = async (req, res) => {
         }
         break;
 
-      case "en_ruta": // Conductor inicia el viaje hacia el destino final
+      case "en_ruta":
         if (
           userRole !== "conductor" ||
-          ride.driver?.toString() !== userId.toString()
+          (ride.driver && !ride.driver.equals(userId)) // Usar .equals()
         ) {
           return res.status(403).json({
             message: "Solo el conductor asignado puede iniciar el viaje.",
           });
         }
-        // Puede pasar de 'aceptado' (si no se usa 'recogido') o de 'recogido'
         if (!["aceptado", "recogido"].includes(ride.status)) {
           return res.status(400).json({
             message:
@@ -346,34 +368,32 @@ exports.updateRideStatus = async (req, res) => {
         }
         break;
 
-      case "finalizado": // Conductor finaliza el viaje
+      case "finalizado":
         if (
           userRole !== "conductor" ||
-          ride.driver?.toString() !== userId.toString()
+          (ride.driver && !ride.driver.equals(userId)) // Usar .equals()
         ) {
           return res.status(403).json({
             message: "Solo el conductor asignado puede finalizar el viaje.",
           });
         }
-        // Puede finalizar desde 'en_ruta' o 'recogido' (en casos de interrupción temprana)
         if (!["en_ruta", "recogido"].includes(ride.status)) {
           return res.status(400).json({
             message:
               "El viaje debe estar 'en_ruta' o 'recogido' para finalizarlo.",
           });
         }
-        // Opcional: Registrar `endTime` o `finalPrice` aquí si aplica
-        // ride.endTime = new Date();
-        // ride.finalPrice = calculateFinalPrice(ride);
         break;
 
-      case "cancelado": // Pasajero o Conductor cancela el viaje
+      case "cancelado":
+        // Primero, convertir userId a ObjectId para comparación con .equals()
+        // const userIdObjectId = new mongoose.Types.ObjectId(userId); // Si userId viene como string, convertirlo.
+        // Asumiendo que req.userId ya es un ObjectId o el middleware lo maneja.
+
         const isRequesterPassenger =
-          ride.passenger?.toString() === userId.toString() &&
-          userRole === "pasajero";
+          ride.passenger && ride.passenger.equals(userId) && userRole === "pasajero";
         const isRequesterDriver =
-          ride.driver?.toString() === userId.toString() &&
-          userRole === "conductor";
+          ride.driver && ride.driver.equals(userId) && userRole === "conductor";
 
         if (!isRequesterPassenger && !isRequesterDriver) {
           return res.status(403).json({
@@ -381,7 +401,6 @@ exports.updateRideStatus = async (req, res) => {
               "No autorizado para cancelar este viaje. Solo el pasajero o el conductor asignado pueden hacerlo.",
           });
         }
-        // Prevenir cancelación si ya está finalizado o cancelado
         if (["finalizado", "cancelado"].includes(ride.status)) {
           return res
             .status(400)
@@ -398,21 +417,18 @@ exports.updateRideStatus = async (req, res) => {
     ride.status = status;
     await ride.save();
 
-    // <<< MODIFICACIÓN: Emitir eventos de Socket.IO para el pasajero con el nuevo estado >>>
     const io = req.app.get("io");
     if (io) {
       const fullRideData = await Ride.findById(rideId)
-        .populate("passenger", "_id") // Solo necesitamos el ID del pasajero para la sala
-        .populate("driver", "_id"); // Solo necesitamos el ID del conductor para la sala
+        .populate("passenger", "_id")
+        .populate("driver", "_id");
 
       if (fullRideData && fullRideData.passenger) {
-        // Emitir a la sala del pasajero
         io.to(fullRideData.passenger._id.toString()).emit(
           "ride_status_update",
           {
             rideId: ride._id.toString(),
             status: ride.status,
-            // Puedes incluir más datos si el frontend los necesita al cambiar de estado
           }
         );
         console.log(
@@ -420,7 +436,6 @@ exports.updateRideStatus = async (req, res) => {
         );
       }
 
-      // Opcional: Si el conductor cancela el viaje, también puedes notificarlo de alguna manera
       if (status === "cancelado" && fullRideData && fullRideData.driver) {
         io.to(fullRideData.driver._id.toString()).emit("ride_status_update", {
           rideId: ride._id.toString(),
@@ -450,14 +465,12 @@ exports.updateRideStatus = async (req, res) => {
   }
 };
 
-// 5. Obtener viajes del usuario (Pasajero o Conductor)
 exports.getMyRides = async (req, res) => {
   const userId = req.userId;
 
   try {
     const rides = await Ride.find({
       $or: [{ passenger: userId }, { driver: userId }],
-      // <<< MODIFICACIÓN: Excluir 'finalizado' y 'cancelado' (mantiene la lógica de "activos/pendientes") >>>
       status: { $nin: ["finalizado", "cancelado"] },
     })
       .populate("passenger", "name email")
@@ -472,14 +485,12 @@ exports.getMyRides = async (req, res) => {
   }
 };
 
-// 6. Obtener viaje activo actual del usuario (rol dinámico)
 exports.getActiveRide = async (req, res) => {
   try {
     const userId = req.userId;
-    const userRole = req.user.role;
+    const userRole = req.userRole; // Asumiendo que userRole viene directamente de req.userRole
 
     const query = {
-      // <<< MODIFICACIÓN: Incluye 'recogido' y 'en_ruta' como estados activos >>>
       status: { $in: ["buscando", "aceptado", "recogido", "en_ruta"] },
       [userRole === "pasajero" ? "passenger" : "driver"]: userId,
     };
@@ -488,8 +499,8 @@ exports.getActiveRide = async (req, res) => {
       .populate("passenger", "name email")
       .populate(
         "driver",
-        "name email vehicle.brand vehicle.model vehicle.color vehicle.licensePlate currentLocation"
-      ) // <<< MODIFICACIÓN: Popular información del vehículo y currentLocation del conductor >>>
+        "name email carDetails.brand carDetails.model carDetails.color carDetails.licensePlate currentLocation" // Corregido: 'carDetails' en lugar de 'vehicle'
+      )
       .sort({ createdAt: -1 });
 
     if (!ride) {
@@ -498,34 +509,22 @@ exports.getActiveRide = async (req, res) => {
         .json({ message: "No hay viajes activos para este usuario." });
     }
 
-    // En exports.getRideById y exports.getActiveRide:
-
-    // ...
     let driverLocation = null;
     if (
       ride.driver &&
       ride.driver.currentLocation &&
-      ride.driver.currentLocation.coordinates
+      typeof ride.driver.currentLocation.latitude === 'number' && // Asegurar que son numbers
+      typeof ride.driver.currentLocation.longitude === 'number'
     ) {
-      // Asegúrate de que coordinates es un array y tiene al menos 2 elementos
-      if (
-        Array.isArray(ride.driver.currentLocation.coordinates) &&
-        ride.driver.currentLocation.coordinates.length >= 2
-      ) {
-        driverLocation = {
-          latitude: ride.driver.currentLocation.coordinates[1],
-          longitude: ride.driver.currentLocation.coordinates[0],
-        };
-      } else {
-        console.warn(
-          `[getRideById/getActiveRide] Driver ${ride.driver._id} has currentLocation but coordinates are invalid.`
-        );
-      }
-    } else if (ride.driver) {
+      driverLocation = {
+        latitude: ride.driver.currentLocation.latitude,
+        longitude: ride.driver.currentLocation.longitude,
+      };
+    } else if (ride.driver && ride.driver._id) { // Fallback solo si ride.driver existe y tiene _id
       // Fallback: Si el driver no tiene currentLocation populada directamente, busca en el modelo Location
       const locationData = await Location.findOne({ user: ride.driver._id });
       if (locationData && locationData.coordinates) {
-        // Asumiendo que locationData.coordinates ya tiene latitude y longitude nombradas
+        // Asumiendo que locationData.coordinates es un objeto { latitude, longitude }
         driverLocation = {
           latitude: locationData.coordinates.latitude,
           longitude: locationData.coordinates.longitude,
@@ -533,7 +532,6 @@ exports.getActiveRide = async (req, res) => {
         };
       }
     }
-    // ...
 
     const response = {
       ...ride.toObject({ getters: true, virtuals: true }),
@@ -549,7 +547,6 @@ exports.getActiveRide = async (req, res) => {
   }
 };
 
-// 7. Obtener viaje por ID
 exports.getRideById = async (req, res) => {
   try {
     const { rideId } = req.params;
@@ -557,19 +554,17 @@ exports.getRideById = async (req, res) => {
       .populate("passenger", "name email")
       .populate(
         "driver",
-        "name email vehicle.brand vehicle.model vehicle.color vehicle.licensePlate currentLocation"
+        "name email carDetails.brand carDetails.model carDetails.color carDetails.licensePlate currentLocation" // Corregido: 'carDetails' en lugar de 'vehicle'
       );
 
     if (!ride) {
       return res.status(404).json({ message: "Viaje no encontrado." });
     }
 
-    // DEBUG LOGS (mantenlos por ahora, son muy útiles)
-    console.log(`[getRideById DEBUG] req.userId (from token): ${req.userId}`); // Esto es un ObjectId
-    console.log(`[getRideById DEBUG] ride.passenger: ${ride.passenger}`); // Esto es un objeto populado, ride.passenger._id es el ObjectId
-    console.log(`[getRideById DEBUG] ride.driver: ${ride.driver}`); // Esto es un objeto populado o null/undefined
+    console.log(`[getRideById DEBUG] req.userId (from token): ${req.userId}`);
+    console.log(`[getRideById DEBUG] ride.passenger: ${ride.passenger}`);
+    console.log(`[getRideById DEBUG] ride.driver: ${ride.driver}`);
 
-    // <<< MODIFICACIÓN CLAVE AQUÍ: Usar .equals() >>>
     const isCurrentPassenger =
       ride.passenger && ride.passenger._id.equals(req.userId);
     const isCurrentDriver = ride.driver && ride.driver._id.equals(req.userId);
@@ -580,9 +575,7 @@ exports.getRideById = async (req, res) => {
     console.log(
       `[getRideById DEBUG] isCurrentDriver (after .equals()): ${isCurrentDriver}`
     );
-    // --- FIN LOGS DE DEPURACIÓN CRUCIALES ---
 
-    // Lógica de autorización simplificada y robusta
     if (!isCurrentPassenger && !isCurrentDriver) {
       console.log(
         "[getRideById] DENYING ACCESS: User is neither passenger nor assigned driver."
@@ -592,35 +585,20 @@ exports.getRideById = async (req, res) => {
         .json({ message: "No autorizado para ver este viaje." });
     }
 
-    // Opcional: Adjuntar la ubicación actual del conductor si el viaje lo tiene asignado
-    // En exports.getRideById y exports.getActiveRide:
-
-    // ...
     let driverLocation = null;
     if (
       ride.driver &&
       ride.driver.currentLocation &&
-      ride.driver.currentLocation.coordinates
+      typeof ride.driver.currentLocation.latitude === 'number' && // Asegurar que son numbers
+      typeof ride.driver.currentLocation.longitude === 'number'
     ) {
-      // Asegúrate de que coordinates es un array y tiene al menos 2 elementos
-      if (
-        Array.isArray(ride.driver.currentLocation.coordinates) &&
-        ride.driver.currentLocation.coordinates.length >= 2
-      ) {
-        driverLocation = {
-          latitude: ride.driver.currentLocation.coordinates[1],
-          longitude: ride.driver.currentLocation.coordinates[0],
-        };
-      } else {
-        console.warn(
-          `[getRideById/getActiveRide] Driver ${ride.driver._id} has currentLocation but coordinates are invalid.`
-        );
-      }
-    } else if (ride.driver) {
-      // Fallback: Si el driver no tiene currentLocation populada directamente, busca en el modelo Location
+      driverLocation = {
+        latitude: ride.driver.currentLocation.latitude,
+        longitude: ride.driver.currentLocation.longitude,
+      };
+    } else if (ride.driver && ride.driver._id) { // Fallback solo si ride.driver existe y tiene _id
       const locationData = await Location.findOne({ user: ride.driver._id });
       if (locationData && locationData.coordinates) {
-        // Asumiendo que locationData.coordinates ya tiene latitude y longitude nombradas
         driverLocation = {
           latitude: locationData.coordinates.latitude,
           longitude: locationData.coordinates.longitude,
@@ -628,7 +606,6 @@ exports.getRideById = async (req, res) => {
         };
       }
     }
-    // ...
 
     const response = {
       ...ride.toObject({ getters: true, virtuals: true }),
@@ -647,15 +624,9 @@ exports.getRideById = async (req, res) => {
   }
 };
 
-// 8. Nuevo endpoint para cancelar viaje (ya lo tenías, solo una pequeña revisión)
-// Lo movemos de 'updateRideStatus' a un endpoint dedicado para mayor claridad si prefieres.
-// Sin embargo, mi sugerencia es que `cancelRide` use `updateRideStatus` internamente o que
-// `updateRideStatus` sea la única forma de cambiar el estado de un viaje.
-// Por ahora, lo dejaré tal cual lo tenías, pero con la sugerencia.
-// Si deseas, podemos eliminar esta función y usar solo updateRideStatus con status: "cancelado".
 exports.cancelRide = async (req, res) => {
   try {
-    const { rideId } = req.params; // Cambiado de 'id' a 'rideId' para consistencia con otros endpoints
+    const { rideId } = req.params;
     const userId = req.userId;
     const userRole = req.userRole;
 
@@ -665,12 +636,10 @@ exports.cancelRide = async (req, res) => {
       return res.status(404).json({ message: "Viaje no encontrado." });
     }
 
-    // <<< Reutiliza la lógica de validación de `updateRideStatus` para `cancelado` >>>
     const isRequesterPassenger =
-      ride.passenger?.toString() === userId.toString() &&
-      userRole === "pasajero";
+      ride.passenger && ride.passenger.equals(userId) && userRole === "pasajero";
     const isRequesterDriver =
-      ride.driver?.toString() === userId.toString() && userRole === "conductor";
+      ride.driver && ride.driver.equals(userId) && userRole === "conductor";
 
     if (!isRequesterPassenger && !isRequesterDriver) {
       return res
@@ -689,7 +658,6 @@ exports.cancelRide = async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      // Notificar al pasajero (si el conductor canceló)
       if (ride.passenger) {
         io.to(ride.passenger.toString()).emit("ride_status_update", {
           rideId: ride._id.toString(),
@@ -699,7 +667,6 @@ exports.cancelRide = async (req, res) => {
           `📡 Emitting ride_status_update (cancelado) to passenger ${ride.passenger} for ride ${ride._id}`
         );
       }
-      // Notificar al conductor (si el pasajero canceló)
       if (ride.driver) {
         io.to(ride.driver.toString()).emit("ride_status_update", {
           rideId: ride._id.toString(),

@@ -4,9 +4,9 @@ const Schema = mongoose.Schema;
 
 const DriverSchema = new Schema({
     // Campos de autenticación y perfil del conductor
-    userId: { // Referencia al ID del usuario si tienes un modelo de Usuario genérico
+    userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User", // Asumiendo que tienes un modelo 'User' para autenticación
+        ref: "User",
         required: true,
         unique: true
     },
@@ -15,7 +15,7 @@ const DriverSchema = new Schema({
         required: true,
         trim: true
     },
-    email: { // Si el email no está en User, ponlo aquí
+    email: {
         type: String,
         required: true,
         unique: true,
@@ -25,39 +25,38 @@ const DriverSchema = new Schema({
     phone: {
         type: String,
         unique: true,
-        sparse: true // Permite que haya múltiples documentos con 'null' si no es requerido
+        sparse: true
     },
 
-    // Detalles del vehículo
+    // Detalles del vehículo - Hacemos estos subcampos REQUIRED
     carDetails: {
-        model: { type: String, trim: true },
-        licensePlate: { type: String, unique: true, trim: true },
-        color: { type: String, trim: true }
+        model: { type: String, required: true, trim: true }, // <-- AHORA REQUIRED
+        licensePlate: { type: String, required: true, unique: true, trim: true }, // <-- AHORA REQUIRED
+        color: { type: String, required: true, trim: true } // <-- AHORA REQUIRED
     },
 
-    // Ubicación actual del conductor
+    // Ubicación actual del conductor - Establecemos a empty object por defecto, no null, si queremos que los subcampos existan
+    // O si siempre esperas lat/lng, hazlos required también
     currentLocation: {
-        latitude: { type: Number, default: null },
-        longitude: { type: Number, default: null }
+        latitude: { type: Number }, // <-- Eliminar default: null para que si existe en DB se pueble, si no, sea undefined
+        longitude: { type: Number } // <-- Eliminar default: null
+        // Considera hacerlos 'required: true' si siempre deben existir
     },
 
-    // Estado de disponibilidad del conductor
     isAvailable: {
         type: Boolean,
         default: false
     },
 
-    // Otros campos específicos del conductor (ej. rating, documentos, etc.)
     rating: {
         type: Number,
         min: 0,
         max: 5,
         default: 5
     },
-    // ... otros campos que necesites ...
 
 }, {
-    timestamps: true // Añade createdAt y updatedAt
+    timestamps: true
 });
 
 module.exports = mongoose.model('Driver', DriverSchema);
